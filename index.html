@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>附近機車停車</title>
+<meta name="description" content="桃園市路邊機車停車格：定位、附近清單、收費時段、一鍵導航">
+<meta name="theme-color" content="#1f6feb">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="機車停車">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="map" aria-label="地圖"></div>
+
+<div class="top">
+  <div class="chips" role="group" aria-label="篩選">
+    <button class="chip" data-filter="now" aria-pressed="false">現在收費中</button>
+    <button class="chip" data-filter="free" aria-pressed="false">只看免費</button>
+    <button class="chip" data-filter="osm" aria-pressed="true">OSM 停車點</button>
+  </div>
+  <div class="chips" role="group" aria-label="搜尋半徑">
+    <button class="chip radius" data-r="300">300 m</button>
+    <button class="chip radius" data-r="500" aria-pressed="true">500 m</button>
+    <button class="chip radius" data-r="1000">1 km</button>
+    <button class="chip radius" data-r="3000">3 km</button>
+  </div>
+</div>
+
+<button id="locate" class="fab" aria-label="回到我的位置" title="回到我的位置">
+  <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><circle cx="12" cy="12" r="4" fill="currentColor"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+</button>
+
+<section id="sheet" class="sheet" aria-label="附近停車">
+  <button class="handle" id="handle" aria-label="展開或收合清單"><span></span></button>
+  <div class="sheet-head">
+    <h1 id="title">附近機車停車</h1>
+    <p id="status" class="muted">正在定位…</p>
+  </div>
+  <div id="detail" class="detail" hidden></div>
+  <ol id="list" class="list"></ol>
+  <p class="foot muted">
+    資料：桃園市政府交通局路邊停車路段收費資訊、© OpenStreetMap 貢獻者。路段位置由路名推算，現場標示為準。
+    <span id="updated"></span><br>
+    長按地圖可加入「我的停車點」（只存在這支手機）。
+  </p>
+</section>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
