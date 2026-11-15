@@ -8,6 +8,7 @@
   --free: #1f9d55;
   --unknown: #7a8591;
   --mine: #8b5cf6;
+  --lot: #0b7285;
   --shadow: 0 6px 24px rgba(0, 0, 0, .18);
   --sheet-peek: 210px;
   color-scheme: light;
@@ -62,6 +63,10 @@ body.sheet-detail:not(.sheet-open) .fab { bottom: calc(50vh + 16px); }
 .dot { flex: none; width: 12px; height: 12px; border-radius: 50%; }
 .dot.paid { background: var(--paid); } .dot.free { background: var(--free); }
 .dot.unknown { background: var(--unknown); } .dot.mine { background: var(--mine); }
+.dot.lot { background: var(--lot); border-radius: 3px; }
+.lot-pin { width: 22px; height: 22px; border-radius: 5px; color: #fff; font: 700 13px/22px sans-serif;
+  text-align: center; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.35); box-sizing: border-box; }
+.lot-pin.sel { transform: scale(1.35); }
 .li-main { flex: 1; min-width: 0; }
 .li-name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .li-sub { font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

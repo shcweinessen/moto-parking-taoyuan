@@ -2,13 +2,13 @@
 
 const FALLBACK = [24.9537, 121.2257]; // 中壢火車站，定位失敗時使用
 const LIST_SIZE = 10;
-const COLORS = { paid: "#e8730c", free: "#1f9d55", unknown: "#7a8591", mine: "#8b5cf6" };
+const COLORS = { paid: "#e8730c", free: "#1f9d55", unknown: "#7a8591", mine: "#8b5cf6", lot: "#0b7285" };
 const DAY = ["", "一", "二", "三", "四", "五", "六", "日"];
 
 const state = {
   me: null,          // [lat, lng]
   radius: 500,
-  filters: { now: false, free: false, osm: true },
+  filters: { now: false, free: false, osm: true, lot: true },
   items: [],         // {id, kind, name, sub, geom: [[lat,lng],...], props, layer}
   selected: null,
 };
@@ -85,15 +85,21 @@ function mineItems() {
   }));
 }
 async function loadData() {
-  const [seg, osm] = await Promise.all([
+  const [seg, osm, lots] = await Promise.all([
     loadJSON("data/segments.geojson"),
     loadJSON("data/osm_moto.geojson").catch(() => ({ features: [] })),
+    loadJSON("data/lots.geojson").catch(() => ({ features: [] })),
   ]);
   document.getElementById("updated").textContent = seg.updated ? `資料更新：${seg.updated}` : "";
   const items = seg.features.map(f => {
     const p = f.properties;
     return { id: p.id, kind: "paid", name: p.name, sub: `${p.town}｜${p.from}－${p.to}`, geom: toLatLngs(f.geometry), props: p };
   });
+  for (const f of lots.features) {
+    const p = f.properties;
+    items.push({ id: `lot-${p.id}`, kind: p.free ? "free" : "lot", lot: true, name: p.name,
+      sub: p.address || "", geom: toLatLngs(f.geometry), props: p });
+  }
   for (const f of osm.features) {
     const p = f.properties;
     const kind = p.fee === "no" ? "free" : p.fee === "yes" ? "paid" : "unknown";
@@ -105,6 +111,7 @@ async function loadData() {
 // ---------- filtering & rendering ----------
 function visible(it) {
   if (it.osm && !state.filters.osm) return false;
+  if (it.lot && !state.filters.lot) return false;
   if (state.filters.free && !(it.kind === "free" || it.kind === "mine")) return false;
   if (state.filters.now && !(it.props.rules && activeRule(it.props.rules))) return false;
   return true;
@@ -116,6 +123,7 @@ function describe(it) {
     return `${shortPrice(r.price)}｜${shortHours(r)}${now ? "" : "｜現在免費"}`;
   }
   if (it.kind === "mine") return "自己標記";
+  if (it.lot) return `停車場｜${it.props.moto.map(x => x.replace(/^機車[-：:]?\s*/, "")).join("、")}`;
   const bits = [it.kind === "free" ? "免費" : it.kind === "paid" ? "收費" : "收費未標示"];
   if (it.props.capacity) bits.push(`${it.props.capacity} 格`);
   if (it.props.hours) bits.push(it.props.hours);
@@ -131,7 +139,10 @@ function render() {
     const color = COLORS[it.kind];
     const isSel = state.selected === it.id;
     let lyr;
-    if (it.geom.length > 1) {
+    if (it.lot) {
+      lyr = L.marker(it.geom[0], { icon: L.divIcon({ className: "", iconSize: [22, 22],
+        html: `<div class="lot-pin${isSel ? " sel" : ""}" style="background:${color}">P</div>` }) });
+    } else if (it.geom.length > 1) {
       lyr = L.polyline(it.geom, { color, weight: isSel ? 9 : 6, opacity: .9, lineCap: "round" });
     } else {
       lyr = L.circleMarker(it.geom[0], { radius: isSel ? 10 : 7, color: "#fff", weight: 2, fillColor: color, fillOpacity: 1 });
@@ -184,6 +195,11 @@ function renderDetail() {
       `${esc(dayRange(r.days))} ${esc(r.start)}–${esc(r.end)}：${esc(r.free ? "免費" : r.price)}`).join("<br>")}</span></div>`;
     rows += `<div class="row"><b>現在</b><span>${now ? `收費中（${esc(now.price)}）` : "不收費"}</span></div>`;
     if (it.props.approx) rows += `<div class="row"><b>注意</b><span>位置為推估，請以現場為準</span></div>`;
+  } else if (it.lot) {
+    rows += `<div class="row"><b>類型</b><span>${esc(it.props.owner)}停車場</span></div>`;
+    if (it.props.address) rows += `<div class="row"><b>地址</b><span>${esc(it.props.address)}</span></div>`;
+    rows += `<div class="row"><b>機車</b><span>${it.props.moto.map(esc).join("<br>")}</span></div>`;
+    if (it.props.other.length) rows += `<div class="row"><b>汽車</b><span class="muted">${it.props.other.map(esc).join("<br>")}</span></div>`;
   } else if (it.kind === "mine") {
     rows += `<div class="row"><b>類型</b><span>你自己標記的停車點</span></div>`;
   } else {

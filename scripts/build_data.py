@@ -26,6 +26,8 @@ DATA = ROOT / "data"
 CACHE = DATA / "geocache.json"
 SOURCE_URL = ("https://opendata.tycg.gov.tw/api/dataset/ffd3180e-75b0-419d-b680-2286bade7958"
               "/resource/99a8b764-8407-4c00-9e6c-57dc8452ecce/download")
+LOTS_URL = ("https://opendata.tycg.gov.tw/api/dataset/f4cc0b12-86ac-40f9-8745-885bddc18f79"
+            "/resource/0daad6e6-0632-44f5-bd25-5e1de1e9146f/download")
 OVERPASS = ["https://overpass-api.de/api/interpreter",
             "https://overpass.kumi.systems/api/interpreter"]
 NOMINATIM = "https://nominatim.openstreetmap.org/search"
@@ -391,6 +393,32 @@ def geocode(dist, seg):
     return None, "failed"
 
 
+def build_lots():
+    """Off-street lots whose fee guide mentions motorcycles."""
+    root = ET.fromstring(http(LOTS_URL))
+    feats = []
+    for e in root.iter("parkingLot"):
+        guide = e.findtext("payGuide") or ""
+        if "機車" not in guide:
+            continue
+        try:  # the feed swaps the names: wgsX is latitude, wgsY is longitude
+            lat, lon = float(e.findtext("wgsX")), float(e.findtext("wgsY"))
+        except (TypeError, ValueError):
+            continue
+        if not (24 < lat < 26 and 120 < lon < 122):
+            continue
+        parts = [x.strip() for x in re.split(r"[，,;；]|:(?=機車)", guide) if x.strip()]
+        moto = [x for x in parts if "機車" in x]
+        feats.append({"type": "Feature", "geometry": {"type": "Point", "coordinates": [round(lon, 6), round(lat, 6)]},
+                      "properties": {"id": e.findtext("parkId") or e.findtext("parkName"),
+                                     "name": e.findtext("parkName"), "town": e.findtext("areaName"),
+                                     "address": e.findtext("address"),
+                                     "moto": moto, "other": [x for x in parts if "機車" not in x],
+                                     "free": all("不收費" in x or "免費" in x for x in moto),
+                                     "owner": "私有" if "私有" in (e.findtext("introduction") or "") else "公有"}})
+    return feats
+
+
 def is_straight(g):
     return bool(g) and g["type"] == "LineString" and len(g["coordinates"]) == 2
 
@@ -449,11 +477,18 @@ def main():
     except RuntimeError as e:
         print(f"OSM points skipped, keeping previous file: {e}", file=sys.stderr)
         elements = None
+    lots = build_lots()
+    (DATA / "lots.geojson").write_text(json.dumps(
+        {"type": "FeatureCollection", "updated": now, "source": "桃園市政府交通局 路外停車資訊",
+         "features": lots}, ensure_ascii=False, separators=(",", ":")))
+    lot_pts = [f["geometry"]["coordinates"] for f in lots]
     pts = []
     for e in elements or []:
         c = e.get("center") or {"lat": e.get("lat"), "lon": e.get("lon")}
         if c.get("lat") is None:
             continue
+        if any(dist_m((c["lon"], c["lat"]), q) < 60 for q in lot_pts):
+            continue  # already listed as an official lot
         t = e.get("tags", {})
         pts.append({"type": "Feature", "geometry": {"type": "Point", "coordinates": [c["lon"], c["lat"]]},
                     "properties": {"id": f"osm-{e['type'][0]}{e['id']}", "name": t.get("name", ""),
@@ -468,7 +503,8 @@ def main():
     for s in segs:
         m = cache[s["id"]]["method"]
         methods[m] = methods.get(m, 0) + 1
-    print(f"segments: {len(feats)}/{len(segs)} placed {methods}; osm points: {len(pts)}", file=sys.stderr)
+    print(f"segments: {len(feats)}/{len(segs)} placed {methods}; lots: {len(lots)}; osm points: {len(pts)}",
+          file=sys.stderr)
 
 
 if __name__ == "__main__":

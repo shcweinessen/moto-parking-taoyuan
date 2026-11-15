@@ -16,8 +16,16 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Check data sources
+        run: |
+          for u in \
+            "https://opendata.tycg.gov.tw/api/dataset/ffd3180e-75b0-419d-b680-2286bade7958/resource/99a8b764-8407-4c00-9e6c-57dc8452ecce/download" \
+            "https://opendata.tycg.gov.tw/api/dataset/f4cc0b12-86ac-40f9-8745-885bddc18f79/resource/0daad6e6-0632-44f5-bd25-5e1de1e9146f/download"; do
+            curl -sS -m 30 -o /dev/null -w "%{http_code} %{size_download} bytes %{time_total}s  $u\n" "$u" || echo "FAILED $u"
+          done
       - name: Build GeoJSON
-        run: python scripts/build_data.py
+        timeout-minutes: 40
+        run: python -u scripts/build_data.py
       - name: Commit if changed
         run: |
           git config user.name "github-actions[bot]"
