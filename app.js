@@ -103,7 +103,7 @@ async function loadData() {
   for (const f of osm.features) {
     const p = f.properties;
     const kind = p.fee === "no" ? "free" : p.fee === "yes" ? "paid" : "unknown";
-    items.push({ id: p.id, kind, osm: true, name: p.name || "機車停車場（OSM）", sub: "OpenStreetMap 標記", geom: toLatLngs(f.geometry), props: p });
+    items.push({ id: p.id, kind, osm: true, name: p.name || (p.lot ? "停車場（OSM）" : "機車停車場（OSM）"), sub: "OpenStreetMap 標記", geom: toLatLngs(f.geometry), props: p });
   }
   state.items = items.concat(mineItems());
 }
@@ -123,7 +123,7 @@ function describe(it) {
     return `${shortPrice(r.price)}｜${shortHours(r)}${now ? "" : "｜現在免費"}`;
   }
   if (it.kind === "mine") return "自己標記";
-  if (it.lot) return `停車場｜${it.props.moto.map(x => x.replace(/^機車[-：:]?\s*/, "")).join("、")}`;
+  if (it.lot) return `停車場｜${it.props.temp.join("、") || "機車費率未註明"}${it.props.cap.length ? "｜有上限" : ""}`;
   const bits = [it.kind === "free" ? "免費" : it.kind === "paid" ? "收費" : "收費未標示"];
   if (it.props.capacity) bits.push(`${it.props.capacity} 格`);
   if (it.props.hours) bits.push(it.props.hours);
@@ -139,7 +139,7 @@ function render() {
     const color = COLORS[it.kind];
     const isSel = state.selected === it.id;
     let lyr;
-    if (it.lot) {
+    if (it.lot || it.props.lot) {
       lyr = L.marker(it.geom[0], { icon: L.divIcon({ className: "", iconSize: [22, 22],
         html: `<div class="lot-pin${isSel ? " sel" : ""}" style="background:${color}">P</div>` }) });
     } else if (it.geom.length > 1) {
@@ -198,13 +198,19 @@ function renderDetail() {
   } else if (it.lot) {
     rows += `<div class="row"><b>類型</b><span>${esc(it.props.owner)}停車場</span></div>`;
     if (it.props.address) rows += `<div class="row"><b>地址</b><span>${esc(it.props.address)}</span></div>`;
-    rows += `<div class="row"><b>機車</b><span>${it.props.moto.map(esc).join("<br>")}</span></div>`;
-    if (it.props.other.length) rows += `<div class="row"><b>汽車</b><span class="muted">${it.props.other.map(esc).join("<br>")}</span></div>`;
+    const p = it.props;
+    rows += `<div class="row"><b>機車臨停</b><span>${p.temp.map(esc).join("<br>") || "資料未註明"}</span></div>`;
+    rows += `<div class="row"><b>收費上限</b><span>${p.cap.length ? p.cap.map(esc).join("<br>")
+      : p.free ? "免費" : p.temp.some(t => t.includes("小時")) ? "資料未註明上限，可能依時數累加"
+      : "按次收費，資料未註明是否限當日"}</span></div>`;
+    if (p.month.length) rows += `<div class="row"><b>機車月租</b><span>${p.month.map(esc).join("<br>")}</span></div>`;
+    rows += `<div class="row"><b>原始說明</b><span class="muted">${esc(p.guide)}</span></div>`;
   } else if (it.kind === "mine") {
     rows += `<div class="row"><b>類型</b><span>你自己標記的停車點</span></div>`;
   } else {
     rows += `<div class="row"><b>收費</b><span>${it.kind === "free" ? "免費" : it.kind === "paid" ? "收費" : "OSM 沒有標示"}</span></div>`;
-    if (it.props.capacity) rows += `<div class="row"><b>格數</b><span>${esc(it.props.capacity)}</span></div>`;
+    if (it.props.charge) rows += `<div class="row"><b>價格</b><span>${esc(it.props.charge)}</span></div>`;
+    if (it.props.capacity) rows += `<div class="row"><b>機車格數</b><span>${esc(it.props.capacity)}</span></div>`;
     if (it.props.hours) rows += `<div class="row"><b>時段</b><span>${esc(it.props.hours)}</span></div>`;
   }
   if (state.me) rows += `<div class="row"><b>距離</b><span>${fmtDist(it.near.d)}（直線）</span></div>`;

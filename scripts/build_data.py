@@ -393,6 +393,51 @@ def geocode(dist, seg):
     return None, "failed"
 
 
+VEH = re.compile(r"(機車|小型車|大型車|汽車)")
+
+
+def parse_lot_guide(guide):
+    """Motorcycle fees from a free-text payGuide: temp/monthly prices and any daily cap."""
+    text = re.sub(r"\s+", " ", guide or "")
+    clauses, veh = [], None
+    for part in re.split(r"[，,;；。、\n]|(?=(?:機車|小型車|大型車|汽車))", text):
+        part = part.strip(" :：")
+        if not part:
+            continue
+        m = VEH.match(part) or VEH.search(part)
+        if m:
+            veh = "moto" if m.group(1) == "機車" else "car"
+        if veh == "moto" and re.search(r"\d|不收費|免費", part):
+            clauses.append(part)
+    daily = "隔日另計" in text  # "per entry, a new day is charged again"
+    temp, month, cap = [], [], []
+    for c in clauses:
+        body = re.sub(r"^機車\s*[-:：]?\s*", "", c)
+        when = "平日" if "平日" in c else "假日" if "假日" in c else ""
+        if re.search(r"不收費|免費|:0/次", c):
+            temp.append("免費")
+            continue
+        n = re.search(r"(\d+)", body)
+        if not n:
+            continue
+        price = int(n.group(1))
+        if re.search(r"月租|/月|季繳", body):
+            month.append(f"{price} 元／{'季' if '季繳' in body else '月'}")
+            continue
+        if re.search(r"上限|最高", body):
+            cap.append(f"{when} {price} 元")
+            continue
+        if re.search(r"/日|當日|一天一次|/當次/日", body) or daily and not re.search(r"/時|/H|/小時", body, re.I):
+            temp.append(f"{when} {price} 元／次")
+            cap.append(f"{when} 當日一次 {price} 元，不再加收")
+        elif re.search(r"/時|元/H|/小時", body, re.I):
+            temp.append(f"{when} {price} 元／小時")
+        else:  # 次 / 計次 / bare number
+            temp.append(f"{when} {price} 元／次")
+    return {"temp": [t.strip() for t in dict.fromkeys(temp)], "month": list(dict.fromkeys(month)),
+            "cap": [c.strip() for c in dict.fromkeys(cap)], "free": bool(temp) and all(t == "免費" for t in temp)}
+
+
 def build_lots():
     """Off-street lots whose fee guide mentions motorcycles."""
     root = ET.fromstring(http(LOTS_URL))
@@ -407,14 +452,14 @@ def build_lots():
             continue
         if not (24 < lat < 26 and 120 < lon < 122):
             continue
-        parts = [x.strip() for x in re.split(r"[，,;；]|:(?=機車)", guide) if x.strip()]
-        moto = [x for x in parts if "機車" in x]
+        fee = parse_lot_guide(guide)
         feats.append({"type": "Feature", "geometry": {"type": "Point", "coordinates": [round(lon, 6), round(lat, 6)]},
                       "properties": {"id": e.findtext("parkId") or e.findtext("parkName"),
                                      "name": e.findtext("parkName"), "town": e.findtext("areaName"),
                                      "address": e.findtext("address"),
-                                     "moto": moto, "other": [x for x in parts if "機車" not in x],
-                                     "free": all("不收費" in x or "免費" in x for x in moto),
+                                     "temp": fee["temp"], "month": fee["month"], "cap": fee["cap"],
+                                     "guide": re.sub(r"\s+", " ", guide).strip(), "free": fee["free"],
+                                     "total": e.findtext("totalSpace") or "",
                                      "owner": "私有" if "私有" in (e.findtext("introduction") or "") else "公有"}})
     return feats
 
@@ -471,7 +516,9 @@ def main():
          "features": feats}, ensure_ascii=False, separators=(",", ":")))
 
     q = ('[out:json][timeout:90];area["name"="桃園市"]["admin_level"="4"]->.a;'
-         'nwr(area.a)["amenity"="motorcycle_parking"];out center tags;')
+         '(nwr(area.a)["amenity"="motorcycle_parking"];'
+         'nwr(area.a)["amenity"="parking"]["motorcycle"~"^(yes|designated)$"];'
+         'nwr(area.a)["amenity"="parking"]["capacity:motorcycle"];);out center tags;')
     try:
         elements = overpass(q)["elements"]
     except RuntimeError as e:
@@ -492,7 +539,10 @@ def main():
         t = e.get("tags", {})
         pts.append({"type": "Feature", "geometry": {"type": "Point", "coordinates": [c["lon"], c["lat"]]},
                     "properties": {"id": f"osm-{e['type'][0]}{e['id']}", "name": t.get("name", ""),
-                                   "fee": t.get("fee", ""), "capacity": t.get("capacity", ""),
+                                   "lot": t.get("amenity") == "parking",
+                                   "fee": t.get("fee", ""), "charge": t.get("charge", ""),
+                                   "capacity": t.get("capacity:motorcycle") or (
+                                       t.get("capacity", "") if t.get("amenity") == "motorcycle_parking" else ""),
                                    "hours": t.get("opening_hours", ""), "covered": t.get("covered", "")}})
     if elements is not None:
         (DATA / "osm_moto.geojson").write_text(json.dumps(

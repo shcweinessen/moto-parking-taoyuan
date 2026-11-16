@@ -76,7 +76,7 @@ body.sheet-detail:not(.sheet-open) .fab { bottom: calc(50vh + 16px); }
 .detail { padding: 4px 16px 12px; border-bottom: 1px solid var(--line); flex: none; max-height: 45vh; overflow-y: auto; }
 .detail h2 { font-size: 18px; margin: 0 0 2px; }
 .detail .row { display: flex; gap: 8px; margin: 6px 0; font-size: 14px; }
-.detail .row b { flex: none; width: 4.5em; color: var(--muted); font-weight: 500; }
+.detail .row b { flex: none; width: 5em; color: var(--muted); font-weight: 500; }
 .badge { display: inline-block; font-size: 12px; padding: 1px 8px; border-radius: 999px; color: #fff; margin-left: 6px; vertical-align: 2px; }
 .badge.on { background: var(--paid); } .badge.off { background: var(--free); }
 .actions { display: flex; gap: 8px; margin-top: 10px; }
